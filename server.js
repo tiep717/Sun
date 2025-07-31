@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 
 // Token này BẮT BUỘC phải được làm mới định kỳ để code hoạt động
-const TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJnZW5kZXIiOjAsImNhblZpZXdTdGF0IjpmYWxzZSwiZGlzcGxheU5hbWUiOiJhcGlzdW53aW52YyIsImJvdCI6MCwiaXNNZXJjaGFudCI6ZmFsc2UsInZlcmlmaWVkQmFua0FjY291bnQiOmZhbHNlLCJwbGF5RXZlbnRMb2JieSI6ZmFsc2UsImN1c3RvbWVySWQiOjI3NjQ3ODE3MywiYWZmSWQiOiJkOTNkM2Q4NC1mMDY5LTRiM2YtOGRhYy1iNDcxNmE4MTIxNDMiLCJiYW5uZWQiOmZhbHNlLCJicmFuZCI6InN1bi53aW4iLCJ0aW1lc3RhbXAiOjE3NTM0NDM3MjM2NjIsImxvY2tHYW1lcyI6W10sImFtb3VudCI6MCwibG9ja0NoYXQiOmZhbHNlLCJwaG9uZVZlcmlmaWVkIjpmYWxzZSwiaXBBZGRyZXNzIjoiMjAwMTplZTA6NTcwODo3NzAwOjhhZjM6YWJkMTpmZTJhOmM2MmMiLCJtdXRlIjpmYWxzZSwiYXZhdGFyIjoiaHR0cHM6Ly9pbWFnZXMuc3dpbnNob3AubmV0L2ltYWdlcy9hdmF0YXIvYXZhdGFyXzIwLnBuZyIsInBsYXRmb3JtSWQiOjUsInVzZXJJZCI6ImQ5M2QzZDg0LWYwNjktNGIzZi04ZGFjLWI0NzE2YTgxMjE0MyIsInJlZ1RpbWUiOjE3NTIwNDU4OTMyOTIsInBob25lIjoiIiwiZGVwb3NpdCI6ZmFsc2UsInVzZXJuYW1lIjoiU0NfYXBpc3Vud2luMTIzIn0.a-KRvIGfMqxtBq3WenudxP8pFx7mxj33iIZm-AklInk";
+const TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJnZW5kZXIiOjAsImNhblZpZXdTdGF0IjpmYWxzZSwiZGlzcGxheU5hbWUiOiJhcGlzdW53aW52YyIsImJvdCI6MCwiaXNNZXJjaGFudCI6ZmFsc2UsInZlcmlmaWVkQmFua0FjY291bnQiOmZhbHNlLCJwbGF5RXZlbnRMb2JieSI6ZmFsc2UsImN1c3RvbWVySWQiOjI3NjQ3ODE3MywiYWZmSWQiOiJkOTNkM2Q4NC1mMDY5LTRiM2YtOGRhYy1iNDcxNmE4MTIxNDMiLCJiYW5uZWQiOmZhbHNlLCJicmFuZCI6InN1bi53aW4iLCJ0aW1lc3RhbXAiOjE3NTM0NDM3MjM2NjIsImxvY2tHYW1lcyI6W10sImFtb3VudCI6MCwibG9ja0NoYXQiOmZhbHNlLCJwaG9uZVZlcmlmaWVkIjpmYWxzZSwiaXBBZGRyZXNzIjoiMjAwMTplZTA6NTcwODo3NzAwOjhhZjM6YWJkMTpmZTJhOmM2MmMiLCJtdXRlIjpmYWxzZSwiYXZhdGFyIjoiaHR0cHM6Ly9pbWFnZXMuc3dpbnNob3AubmV0L2ltYWdlcy9hdmF0YXIvYXZhdGFyXzIwLnBuZyIsInBsYXRmb3JtSWQiOjUsInVzZXJJZCI6ImQ5M2QzZDg0LWYwNjktNGIzZi04ZGFjLWI0NzE6YTgxMjE0MyIsInJlZ1RpbWUiOjE3NTIwNDU4OTMyOTIsInBob25lIjoiIiwiZGVwb3NpdCI6ZmFsc2UsInVzZXJuYW1lIjoiU0NfYXBpc3Vud2luMTIzIn0.a-KRvIGfMqxtBq3WenudxP8pFx7mxj33iIZm-AklInk";
 
 const fastify = Fastify({ logger: false });
 const PORT = process.env.PORT || 3001;
@@ -17,11 +17,12 @@ let rikWS = null;
 let rikIntervalCmd = null;
 
 // ==================================================================
-// LOGIC DỰ ĐOÁN V4 - HỆ THỐNG PHÂN TÍCH ĐỒNG THUẬN
+// LOGIC DỰ ĐOÁN V9 - LOGIC DỰ PHÒNG NÂNG CAO
 // ==================================================================
 const detectors = [
     {
         name: "Cầu Bệt",
+        needs: "tx",
         detect: (history) => {
             if (history.length < 3) return null;
             const last = history[0];
@@ -37,29 +38,64 @@ const detectors = [
         }
     },
     {
-        name: "Cầu 1-1",
+        name: "Cầu 1-1 (Nâng cao)",
+        needs: "tx",
         detect: (history) => {
-             if (history.length < 4) return null;
-            const recent = history.slice(0, 5);
-            if (recent[0] !== recent[1] && recent[1] !== recent[2] && recent[2] !== recent[3]) {
-                return { prediction: recent[1], confidence: 7 };
+            if (history.length < 4) return null;
+            let streak = 0;
+            for (let i = 0; i < history.length - 1; i++) {
+                if (history[i] !== history[i+1]) {
+                    streak++;
+                } else {
+                    break;
+                }
+            }
+            streak++;
+            if (streak >= 4) {
+                return { prediction: history[1], confidence: Math.min(10, 4 + streak) };
             }
             return null;
         }
     },
     {
-        name: "Cầu 2-2",
+        name: "Cầu 2-2 (Nâng cao)",
+        needs: "tx",
         detect: (history) => {
             if (history.length < 4) return null;
-            const recent = history.slice(0, 4);
-            if (recent[0] === recent[1] && recent[2] === recent[3] && recent[0] !== recent[2]) {
-                return { prediction: recent[0], confidence: 8 };
+            let streak = 0;
+            for (let i = 0; i < history.length - 3; i += 2) {
+                if (history[i] === history[i+1] && history[i+1] !== history[i+2] && history[i+2] === history[i+3]) {
+                    streak += 2;
+                } else {
+                    break;
+                }
+            }
+            if (history[streak] === history[streak+1]) {
+                streak +=2;
+            }
+
+            if (streak >= 4) {
+                 return { prediction: history[0], confidence: Math.min(10, 4 + streak) };
+            }
+            return null;
+        }
+    },
+    {
+        name: "Cầu Lặp Khối", // Được thêm lại
+        needs: "tx",
+        detect: (history) => {
+            if (history.length < 6) return null;
+            const block1 = history.slice(0, 3).join('');
+            const block2 = history.slice(3, 6).join('');
+            if (block1 === block2) {
+                return { prediction: history[2], confidence: 9 };
             }
             return null;
         }
     },
     {
         name: "Phân tích Chuyển tiếp",
+        needs: "tx",
         detect: (history) => {
             if (history.length < 20) return null;
             const lastResult = history[0];
@@ -87,8 +123,75 @@ const detectors = [
 
             return null;
         }
+    },
+    {
+        name: "Phân tích Vị Xúc Xắc (Cặp)",
+        needs: "full",
+        detect: (fullHistory) => {
+            if (fullHistory.length < 1) return null;
+            const { d1, d2, d3 } = fullHistory[0];
+
+            if (d1 === d2 || d1 === d3 || d2 === d3) {
+                const currentResult = getTX(d1, d2, d3);
+                const prediction = currentResult === 'T' ? 'X' : 'T';
+                return { prediction, confidence: 5 };
+            }
+
+            return null;
+        }
+    },
+    {
+        name: "Phân tích Xu hướng Xúc Xắc",
+        needs: "full",
+        detect: (fullHistory) => {
+            if (fullHistory.length < 2) return null;
+            const last = fullHistory[0];
+            const prev = fullHistory[1];
+
+            const delta1 = last.d1 - prev.d1;
+            const delta2 = last.d2 - prev.d2;
+            const delta3 = last.d3 - prev.d3;
+
+            const maxChange = Math.max(Math.abs(delta1), Math.abs(delta2), Math.abs(delta3));
+            if (maxChange >= 4) {
+                const currentResult = getTX(last.d1, last.d2, last.d3);
+                const prediction = currentResult === 'T' ? 'X' : 'T';
+                return { prediction, confidence: 6 };
+            }
+
+            const totalMomentum = delta1 + delta2 + delta3;
+            if (totalMomentum >= 5) {
+                return { prediction: 'T', confidence: 4 };
+            }
+            if (totalMomentum <= -5) {
+                return { prediction: 'X', confidence: 4 };
+            }
+
+            return null;
+        }
     }
 ];
+
+// Hàm phân tích chuyển tiếp phụ cho logic dự phòng
+function analyzeSecondaryTransitions(history, target) {
+    const transitions = { T: { T: 0, X: 0 }, X: { T: 0, X: 0 } };
+    for (let i = 0; i < history.length - 1; i++) {
+        const current = history[i];
+        const next = history[i+1];
+        if (transitions[next]) {
+            transitions[next][current]++;
+        }
+    }
+    const possibilities = transitions[target];
+    const total = possibilities.T + possibilities.X;
+    if (total < 4) return null;
+    const diff = Math.abs(possibilities.T - possibilities.X);
+    if (diff / total > 0.4) { // Cần tín hiệu mạnh hơn ở lớp dự phòng
+        return possibilities.T > possibilities.X ? 'T' : 'X';
+    }
+    return null;
+}
+
 
 function smarterPredict(fullHistory) {
     if (fullHistory.length < 3) {
@@ -98,20 +201,38 @@ function smarterPredict(fullHistory) {
     const historyTX = fullHistory.map(r => getTX(r.d1, r.d2, r.d3));
     const activePredictions = [];
 
-    // 1. Thu thập tất cả các dự đoán từ các bộ phân tích
     for (const detector of detectors) {
-        const result = detector.detect(historyTX);
+        const historyForDetector = detector.needs === "full" ? fullHistory : historyTX;
+        const result = detector.detect(historyForDetector);
         if (result) {
             activePredictions.push(result);
         }
     }
 
-    // 2. Nếu không có bộ nào đưa ra ý kiến, dự đoán đảo ngược
     if (activePredictions.length === 0) {
-        return { prediction: historyTX[0] === 'T' ? 'X' : 'T', confidence: 55 };
+        // --- HỆ THỐNG DỰ PHÒNG ĐA TẦNG ---
+
+        // Lớp 1: Phân tích tần suất 20 phiên
+        const recentHistory = historyTX.slice(0, 20);
+        const tCount = recentHistory.filter(r => r === 'T').length;
+        const xCount = recentHistory.filter(r => r === 'X').length;
+        if (Math.abs(tCount - xCount) / 20 >= 0.3) { // Nếu 1 bên chiếm ưu thế 65% trở lên
+            return { prediction: tCount > xCount ? 'T' : 'X', confidence: 58 };
+        }
+
+        // Lớp 2: Phân tích chuyển tiếp bậc hai (của phiên N-2)
+        if (historyTX.length >= 20) {
+            const secondaryPrediction = analyzeSecondaryTransitions(historyTX, historyTX[1]);
+            if (secondaryPrediction) {
+                return { prediction: secondaryPrediction, confidence: 55 };
+            }
+        }
+        
+        // Lớp 3: Dự đoán đảo ngược (cuối cùng)
+        return { prediction: historyTX[0] === 'T' ? 'X' : 'T', confidence: 51 };
     }
 
-    // 3. Phân tích sự đồng thuận và mâu thuẫn
+    // --- HỆ THỐNG ĐỒNG THUẬN ---
     let scores = { T: 0, X: 0 };
     let counts = { T: 0, X: 0 };
     for (const pred of activePredictions) {
@@ -122,19 +243,15 @@ function smarterPredict(fullHistory) {
     const finalPrediction = scores.T >= scores.X ? 'T' : 'X';
     let finalConfidence;
 
-    // 4. Tính toán độ tin cậy cuối cùng
     const totalDetectorsFired = counts.T + counts.X;
     const agreementRatio = Math.max(counts.T, counts.X) / totalDetectorsFired;
 
     if (agreementRatio === 1) {
-        // Tất cả đều đồng thuận -> Độ tin cậy rất cao
         finalConfidence = 95;
     } else if (agreementRatio > 0.6) {
-        // Đa số đồng thuận -> Độ tin cậy cao
-        finalConfidence = 75 + Math.floor((agreementRatio - 0.6) * 50); // 75% -> 95%
+        finalConfidence = 75 + Math.floor((agreementRatio - 0.6) * 50);
     } else {
-        // Có sự mâu thuẫn (gần 50/50) -> Độ tin cậy thấp
-        finalConfidence = 50 + Math.floor(Math.abs(scores.T - scores.X)); // 50% -> 65%
+        finalConfidence = 50 + Math.floor(Math.abs(scores.T - scores.X));
         finalConfidence = Math.min(65, finalConfidence);
     }
     
@@ -230,7 +347,7 @@ function connectRikWebSocket() {
             timestamp: 1753443723662,
             refreshToken: "dd38d05401bb48b4ac3c2f6dc37f36d9.f22dccad89bb4e039814b7de64b05d63",
           }),
-          signature: "4FD3165D59BD21DA76B4448EA62E81972BCD54BE0EDBC5291D2415274DA522089BF9318E829A67D07EC78783543D17E75671CBD6FDF60B42B55643F13B66DEB7B0510DE995A8C7C8EDBA4990CE3294C4340D86BF78B02A0E90C6565D1A32EAA894F7384302602CB2703C20981244103E42817257592D42828D6EDB0BB781ADA1",
+          signature: "4FD3165D59BD21DA76B4448EA62E81972BCD54BE0EDBC5291D2415274DA522089BF9318E829A67D07EC78783543D17E75671CBD6DF60B42B55643F13B66DEB7B0510DE995A8C7C8EDBA4990CE3294C4340D86BF78B02A0E90C6565D1A32EAA894F7384302602CB2703C20981244103E42817257592D42828D6EDB0BB781ADA1",
           pid: 5,
           subi: true
         }
@@ -253,7 +370,6 @@ function connectRikWebSocket() {
           if (rikResults.length > 100) rikResults.pop();
           saveHistory();
           console.log(`📥 Phiên mới ${res.sid} → ${getTX(res.d1, res.d2, res.d3)}`);
-          setTimeout(() => { rikWS?.close(); connectRikWebSocket(); }, 1000);
         }
       } else if (Array.isArray(json) && json[1]?.htr) {
         rikResults = json[1].htr.map(i => ({
@@ -299,6 +415,7 @@ fastify.get("/api/taixiu/sunwin", async () => {
   const patternString = valid
     .slice(0, 13)
     .map(session => getTX(session.d1, session.d2, session.d3))
+    .reverse()
     .join('');
 
   return {
